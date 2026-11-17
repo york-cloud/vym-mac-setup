@@ -1,6 +1,6 @@
 # ViewYork Media: Mac-Setup
 
-Richtet einen neuen Mac im ViewYork-Standard ein: Programme, Dock, Screenshots, Scrollrichtung, Hintergrund- und Profilbild.
+Richtet einen neuen Mac im ViewYork-Standard ein: Programme, Dock, Finder-Leisten, aktive Ecken, Screenshots (eigener Ordner, auch in der Finder-Seitenleiste), Scrollrichtung, Hintergrund- und Profilbild.
 
 ## Start auf dem neuen Mac
 
@@ -18,7 +18,7 @@ zsh ~/setup.sh --dock
 
 ## Inhalt
 
-- `setup.sh`: das Skript. Der ViewYork-Standard (Programme, Dock-Größe) steht oben im Abschnitt Einstellungen.
+- `setup.sh`: das Skript. Der ViewYork-Standard (Programme, Dock-Größe, Finder, aktive Ecken) steht oben im Abschnitt Einstellungen.
 - `assets/vym-hintergrund.png`: Hintergrundbild, 3456 x 2234 Pixel.
 - `assets/vym-profilbild.png`: Profilbild für das Benutzerkonto.
 

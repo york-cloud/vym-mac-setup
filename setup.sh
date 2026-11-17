@@ -1,10 +1,11 @@
 #!/bin/zsh
 # =============================================================================
 #  ViewYork Media: Mac-Setup
-#  Version 1.2, Stand 17.11.2026
+#  Version 1.4, Stand 17.11.2026
 #
 #  Richtet einen frisch gestarteten Mac im ViewYork-Standard ein:
-#  Programme, Dock, Screenshots, Scrollrichtung, Hintergrund- und Profilbild.
+#  Programme, Dock, Finder, aktive Ecken, Screenshots, Scrollrichtung,
+#  Hintergrund- und Profilbild.
 #  Läuft nach dem Einrichtungsassistenten im Benutzerkonto der neuen Person.
 #
 #  Aufruf:
@@ -38,6 +39,21 @@ DOCK_SHOW_RECENTS=false     # "Zuletzt verwendete Programme" im Dock ausblenden
 
 # Screenshots
 SCREENSHOT_DIR="$HOME/Documents/Screenshots"
+
+# Aktive Ecken: Mauszeiger in die Bildschirmecke schieben löst eine Aktion aus.
+# Werte: 0 = keine Aktion, 2 = Mission Control (alle offenen Fenster als Übersicht),
+#        3 = Fenster des aktuellen Programms, 4 = Schreibtisch anzeigen,
+#        5 = Bildschirmschoner, 10 = Display aus, 11 = Launchpad bzw. Apps,
+#        12 = Mitteilungszentrale, 13 = Bildschirm sperren, 14 = Schnellnotiz
+HOTCORNER_OBEN_LINKS=2      # Übersicht aller offenen Fenster
+HOTCORNER_OBEN_RECHTS=4     # Fenster zur Seite, Schreibtisch sichtbar
+# Die unteren Ecken bleiben, wie macOS sie vorgibt.
+
+# Finder: Leisten, die in jedem Fenster sichtbar sein sollen
+FINDER_STATUSBAR=true       # Statusleiste (unten: Anzahl Objekte, freier Speicher)
+FINDER_PATHBAR=true         # Pfadleiste (unten: Weg zum aktuellen Ordner)
+FINDER_TABBAR=true          # Tableiste (oben, auch bei nur einem Tab)
+SIDEBAR_SCREENSHOTS=true    # Ordner Screenshots in die Favoriten der Seitenleiste
 
 # GitHub-Ablage. Von hier lädt das Skript Hintergrund- und Profilbild,
 # wenn sie nicht schon im Ordner "assets" neben dem Skript liegen.
@@ -78,6 +94,45 @@ ok()       { printf "  [ok]    %s\n" "$1"; REPORT_OK+=("$1"); }
 open_item(){ printf "  [offen] %s\n" "$1"; REPORT_OPEN+=("$1"); }
 info()     { printf "  %s\n" "$1"; }
 
+# Homebrew setzt die Admin-Berechtigung nach manchen Installationen zurück.
+# Dann wird das Passwort ein zweites Mal gebraucht. Diese Funktion sagt das an.
+ensure_sudo() {
+  if ! sudo -n true 2>/dev/null; then
+    info "Das Mac-Passwort wird noch einmal gebraucht (die Eingabe bleibt unsichtbar)."
+    sudo -v
+  fi
+}
+
+# Legt einen Ordner in die Favoriten der Finder-Seitenleiste.
+# Apple bietet dafür keinen offiziellen Befehl. Genutzt wird eine ältere
+# Systemschnittstelle, die auf aktuellen macOS-Versionen noch funktioniert.
+# Schlägt das fehl, meldet das Skript den Punkt als offen.
+add_to_sidebar() {
+  local folder="$1"
+  local marker_dir="$HOME/Library/Application Support/ViewYork"
+  local marker="$marker_dir/seitenleiste-$(basename "$folder")"
+  [ -f "$marker" ] && return 0            # wurde bei einem früheren Lauf erledigt
+  command -v swift >/dev/null 2>&1 || return 1
+  local src
+  src="$(mktemp -d)/sidebar.swift"
+  cat > "$src" <<'SWIFT'
+import Foundation
+import CoreServices
+let url = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true) as CFURL
+guard let listRef = LSSharedFileListCreate(nil, kLSSharedFileListFavoriteItems.takeUnretainedValue(), nil) else { exit(1) }
+let list = listRef.takeRetainedValue()
+let item = LSSharedFileListInsertItemURL(list, kLSSharedFileListItemLast.takeUnretainedValue(), nil, nil, url, nil, nil)
+exit(item == nil ? 1 : 0)
+SWIFT
+  if swift "$src" "$folder" >/dev/null 2>&1; then
+    mkdir -p "$marker_dir" && touch "$marker"
+    rm -rf "$(dirname "$src")"
+    return 0
+  fi
+  rm -rf "$(dirname "$src")"
+  return 1
+}
+
 # Sucht eine Web-App im Chrome-Apps-Ordner. Übergeben werden mögliche Namen,
 # weil Chrome je nach Sprache anders benennt (z. B. "Sheets" oder "Tabellen").
 find_webapp() {
@@ -104,7 +159,7 @@ dock_add() {
 
 # ----------------------------- Vorprüfungen ----------------------------------
 echo ""
-echo "ViewYork Media Mac-Setup, Version 1.2"
+echo "ViewYork Media Mac-Setup, Version 1.4"
 echo "Start: $(date '+%d.%m.%Y %H:%M') als Benutzer $(whoami)"
 
 if [ "$(uname)" != "Darwin" ]; then
@@ -129,6 +184,7 @@ build_dock() {
 
   if ! command -v dockutil >/dev/null 2>&1; then
     open_item "dockutil fehlt, Dock wurde nicht angepasst"
+    killall Dock >/dev/null 2>&1     # damit zumindest die aktiven Ecken greifen
     return
   fi
 
@@ -255,6 +311,48 @@ fi
 defaults write NSGlobalDomain com.apple.swipescrolldirection -bool false
 ok "Natürliches Scrollen aus (greift nach Ab- und Anmelden)"
 
+# ----------------------------- Finder ----------------------------------------
+say_step "Finder"
+
+defaults write com.apple.finder ShowStatusBar -bool "$FINDER_STATUSBAR"
+ok "Finder: Statusleiste eingeblendet"
+
+defaults write com.apple.finder ShowPathbar -bool "$FINDER_PATHBAR"
+ok "Finder: Pfadleiste eingeblendet"
+
+# Die Tableiste hat je nach macOS-Version einen anderen Schlüssel, daher beide
+defaults write com.apple.finder "NSWindowTabbingShoudShowTabBarKey-com.apple.finder.TBrowserWindow" -bool "$FINDER_TABBAR"
+defaults write com.apple.finder ShowTabView -bool "$FINDER_TABBAR"
+ok "Finder: Tableiste eingeblendet (bitte im Finder kurz gegenprüfen)"
+
+killall Finder >/dev/null 2>&1
+
+if [ "$SIDEBAR_SCREENSHOTS" = "true" ]; then
+  if add_to_sidebar "$SCREENSHOT_DIR"; then
+    ok "Finder: Ordner Screenshots liegt in der Seitenleiste"
+  else
+    open "$(dirname "$SCREENSHOT_DIR")" >/dev/null 2>&1
+    open_item "Finder: Ordner Screenshots bitte von Hand in die Seitenleiste ziehen (das Fenster Dokumente ist geöffnet)"
+  fi
+fi
+
+# ----------------------------- Aktive Ecken ----------------------------------
+say_step "Aktive Ecken"
+
+# Der zweite Wert (modifier 0) heißt: ohne Zusatztaste auslösen.
+# Wirksam wird das mit dem Neustart des Docks im Abschnitt Dock weiter unten.
+defaults write com.apple.dock wvous-tl-corner -int "$HOTCORNER_OBEN_LINKS"
+defaults write com.apple.dock wvous-tl-modifier -int 0
+defaults write com.apple.dock wvous-tr-corner -int "$HOTCORNER_OBEN_RECHTS"
+defaults write com.apple.dock wvous-tr-modifier -int 0
+
+if [ "$(defaults read com.apple.dock wvous-tl-corner 2>/dev/null)" = "$HOTCORNER_OBEN_LINKS" ] && \
+   [ "$(defaults read com.apple.dock wvous-tr-corner 2>/dev/null)" = "$HOTCORNER_OBEN_RECHTS" ]; then
+  ok "Aktive Ecken: oben links Fensterübersicht, oben rechts Schreibtisch"
+else
+  open_item "Aktive Ecken ließen sich nicht setzen (Systemeinstellungen, Schreibtisch und Dock, ganz unten)"
+fi
+
 # ----------------------------- Hintergrund und Profilbild --------------------
 say_step "Hintergrund und Profilbild"
 
@@ -294,6 +392,7 @@ fi
 
 # Profilbild des Benutzerkontos
 if fetch_asset "vym-profilbild.png"; then
+  ensure_sudo
   sudo mkdir -p "$(dirname "$PROFILE_FILE")"
   sudo cp "$ASSET_TMP/vym-profilbild.png" "$PROFILE_FILE"
   sudo chmod 644 "$PROFILE_FILE"
