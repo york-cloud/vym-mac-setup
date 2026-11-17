@@ -1,6 +1,6 @@
 # ViewYork Media: Mac-Setup
 
-Richtet einen neuen Mac im ViewYork-Standard ein: Programme, Dock, Finder-Leisten, aktive Ecken, Screenshots (eigener Ordner, auch in der Finder-Seitenleiste), Scrollrichtung, Hintergrund- und Profilbild.
+Richtet einen neuen Mac im ViewYork-Standard ein: Programme, Dock, Finder-Leisten, aktive Ecken, Screenshots (eigener Ordner), Scrollrichtung, Hintergrund- und Profilbild.
 
 ## Start auf dem neuen Mac
 
@@ -24,6 +24,7 @@ zsh ~/setup.sh --dock
 
 ## Hinweise
 
+- Von Hand bleiben: Ordner Screenshots in die Finder-Seitenleiste ziehen, automatische Helligkeit aus, Widgets, Standardbrowser. Das Skript nennt diese Punkte am Ende.
 - Das Skript enthält keine Passwörter und meldet niemanden an.
 - Es kann beliebig oft laufen, bereits Installiertes wird übersprungen.
 - Protokoll auf dem Mac: `~/Library/Logs/vym-mac-setup.log`

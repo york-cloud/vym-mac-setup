@@ -1,7 +1,7 @@
 #!/bin/zsh
 # =============================================================================
 #  ViewYork Media: Mac-Setup
-#  Version 1.4, Stand 17.11.2026
+#  Version 1.5, Stand 17.11.2026
 #
 #  Richtet einen frisch gestarteten Mac im ViewYork-Standard ein:
 #  Programme, Dock, Finder, aktive Ecken, Screenshots, Scrollrichtung,
@@ -53,7 +53,6 @@ HOTCORNER_OBEN_RECHTS=4     # Fenster zur Seite, Schreibtisch sichtbar
 FINDER_STATUSBAR=true       # Statusleiste (unten: Anzahl Objekte, freier Speicher)
 FINDER_PATHBAR=true         # Pfadleiste (unten: Weg zum aktuellen Ordner)
 FINDER_TABBAR=true          # Tableiste (oben, auch bei nur einem Tab)
-SIDEBAR_SCREENSHOTS=true    # Ordner Screenshots in die Favoriten der Seitenleiste
 
 # GitHub-Ablage. Von hier lädt das Skript Hintergrund- und Profilbild,
 # wenn sie nicht schon im Ordner "assets" neben dem Skript liegen.
@@ -103,36 +102,6 @@ ensure_sudo() {
   fi
 }
 
-# Legt einen Ordner in die Favoriten der Finder-Seitenleiste.
-# Apple bietet dafür keinen offiziellen Befehl. Genutzt wird eine ältere
-# Systemschnittstelle, die auf aktuellen macOS-Versionen noch funktioniert.
-# Schlägt das fehl, meldet das Skript den Punkt als offen.
-add_to_sidebar() {
-  local folder="$1"
-  local marker_dir="$HOME/Library/Application Support/ViewYork"
-  local marker="$marker_dir/seitenleiste-$(basename "$folder")"
-  [ -f "$marker" ] && return 0            # wurde bei einem früheren Lauf erledigt
-  command -v swift >/dev/null 2>&1 || return 1
-  local src
-  src="$(mktemp -d)/sidebar.swift"
-  cat > "$src" <<'SWIFT'
-import Foundation
-import CoreServices
-let url = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true) as CFURL
-guard let listRef = LSSharedFileListCreate(nil, kLSSharedFileListFavoriteItems.takeUnretainedValue(), nil) else { exit(1) }
-let list = listRef.takeRetainedValue()
-let item = LSSharedFileListInsertItemURL(list, kLSSharedFileListItemLast.takeUnretainedValue(), nil, nil, url, nil, nil)
-exit(item == nil ? 1 : 0)
-SWIFT
-  if swift "$src" "$folder" >/dev/null 2>&1; then
-    mkdir -p "$marker_dir" && touch "$marker"
-    rm -rf "$(dirname "$src")"
-    return 0
-  fi
-  rm -rf "$(dirname "$src")"
-  return 1
-}
-
 # Sucht eine Web-App im Chrome-Apps-Ordner. Übergeben werden mögliche Namen,
 # weil Chrome je nach Sprache anders benennt (z. B. "Sheets" oder "Tabellen").
 find_webapp() {
@@ -159,7 +128,7 @@ dock_add() {
 
 # ----------------------------- Vorprüfungen ----------------------------------
 echo ""
-echo "ViewYork Media Mac-Setup, Version 1.4"
+echo "ViewYork Media Mac-Setup, Version 1.5"
 echo "Start: $(date '+%d.%m.%Y %H:%M') als Benutzer $(whoami)"
 
 if [ "$(uname)" != "Darwin" ]; then
@@ -327,15 +296,6 @@ ok "Finder: Tableiste eingeblendet (bitte im Finder kurz gegenprüfen)"
 
 killall Finder >/dev/null 2>&1
 
-if [ "$SIDEBAR_SCREENSHOTS" = "true" ]; then
-  if add_to_sidebar "$SCREENSHOT_DIR"; then
-    ok "Finder: Ordner Screenshots liegt in der Seitenleiste"
-  else
-    open "$(dirname "$SCREENSHOT_DIR")" >/dev/null 2>&1
-    open_item "Finder: Ordner Screenshots bitte von Hand in die Seitenleiste ziehen (das Fenster Dokumente ist geöffnet)"
-  fi
-fi
-
 # ----------------------------- Aktive Ecken ----------------------------------
 say_step "Aktive Ecken"
 
@@ -453,10 +413,16 @@ Nächste Schritte (Schritt 4 im Ablauf):
   4. Claude öffnen, mit dem neuen Konto anmelden, Onboarding-Auftrag starten.
 
 Von Hand zu erledigen (per Befehl nicht zuverlässig setzbar):
+  - Ordner Screenshots in die Finder-Seitenleiste ziehen
+    (das Finder-Fenster mit dem Ordner ist bereits geöffnet)
   - Automatische Helligkeit aus: Systemeinstellungen, Displays
   - Schreibtisch-Widgets: nur Wetter stehen lassen
   - Chrome als Standardbrowser bestätigen (macOS fragt nach)
 
 EOF
+# Zeigt den Ordner Screenshots im Finder, damit er sich mit einem Handgriff
+# in die Seitenleiste ziehen lässt. macOS bietet dafür keinen Befehl mehr.
+open -R "$SCREENSHOT_DIR" >/dev/null 2>&1
+
 echo "Protokoll: $LOGFILE"
 echo "Ende: $(date '+%d.%m.%Y %H:%M')"
